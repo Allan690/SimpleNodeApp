@@ -1,0 +1,49 @@
+version: 2.1
+# orbs are shareable packages of configuration elements including jobs, commands and executors
+orbs:
+  node: circleci/node@2.0.2
+jobs: # a collection of steps
+  build:
+    description: Build app and run tests
+    machine: # the machine in which our steps will execute
+      image: ubuntu-1604:201903-01
+    steps:
+      - checkout
+      - node/install:
+            install-yarn: true # installs yarn
+            install-npm: false
+            node-version: latest # defaults to the latest version of Node.js
+      - node/install-packages:
+          cache-key: yarn.lock # if this file is updated a new cache bucket is created
+          pkg-manager: yarn # sets default node package manager to use
+          with-cache: true #enables automatic caching of node dependencies
+      - run:
+          name: Run tests
+          command: yarn test
+
+  Build-Push-Image-Docker:
+    description: Build and push image to Docker Hub
+    machine:
+      image: ubuntu-1604:201903-01
+    steps:
+      - checkout
+      - run:
+          name: Build and push docker image
+          command: |
+            export IMG_TAG=$(echo $CIRCLE_SHA1 | cut -c -7)
+            echo $IMG_TAG
+            docker build -t ${HUB_USERNAME}/samplenodeapp:${IMG_TAG} .
+            docker login --username ${HUB_USERNAME} --password ${HUB_PASSWORD}
+            docker push ${HUB_USERNAME}/samplenodeapp:${IMG_TAG}
+
+workflows: # a set of rules for defining a collection of jobs and their run order
+  build_update_deploy:
+    jobs:
+      - build
+      - Build-Push-Image-Docker:
+          filters:
+            branches:
+              only:
+               - master
+          requires:
+            - build
